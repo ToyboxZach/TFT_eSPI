@@ -2920,7 +2920,7 @@ int16_t TFT_eSPI::textWidth(const char *string, uint8_t font)
           bool found = getUnicodeIndex(uniCode, &gNum);
           if (found) {
             if(str_width == 0 && gdX[gNum] < 0) str_width -= gdX[gNum];
-            if (*string || isDigits) str_width += gxAdvance[gNum];
+            if (*string || isDigits) str_width += gxAdvance[gNum] + letterSpacing;
             else str_width += (gdX[gNum] + gWidth[gNum]);
           }
           else str_width += gFont.spaceWidth + 1;
