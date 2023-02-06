@@ -11,16 +11,18 @@
   #ifdef CONFIG_IDF_TARGET_ESP32
     #ifdef USE_HSPI_PORT
       SPIClass spi = SPIClass(HSPI);
+    #elif defined(USE_FSPI_PORT)
+      SPIClass spi = SPIClass(FSPI);
     #else // use default VSPI port
-      //SPIClass& spi = SPI;
       SPIClass spi = SPIClass(VSPI);
     #endif
   #else
     #ifdef USE_HSPI_PORT
       SPIClass spi = SPIClass(HSPI);
-    #else // use FSPI port
-      //SPIClass& spi = SPI;
+    #elif defined(USE_FSPI_PORT)
       SPIClass spi = SPIClass(FSPI);
+    #else // use FSPI port
+      SPIClass& spi = SPI;
     #endif
   #endif
 #endif
@@ -32,6 +34,8 @@
     #define DMA_CHANNEL 1
     #ifdef USE_HSPI_PORT
       spi_host_device_t spi_host = HSPI_HOST;
+    #elif defined(USE_FSPI_PORT)
+      spi_host_device_t spi_host = SPI_HOST;
     #else // use VSPI port
       spi_host_device_t spi_host = VSPI_HOST;
     #endif
@@ -60,29 +64,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////
 
 /***************************************************************************************
-** Function name:           beginSDA
-** Description:             Detach SPI from pin to permit software SPI
+** Function name:           beginSDA - VSPI port only, FPSI port only for S2
+** Description:             Detach MOSI and attach MISO to SDA for reads
 ***************************************************************************************/
 void TFT_eSPI::begin_SDA_Read(void)
 {
-  pinMatrixOutDetach(TFT_MOSI, false, false);
-  pinMode(TFT_MOSI, INPUT);
-  pinMatrixInAttach(TFT_MOSI, VSPIQ_IN_IDX, false);
+  gpio_set_direction((gpio_num_t)TFT_MOSI, GPIO_MODE_INPUT);
+  #ifdef CONFIG_IDF_TARGET_ESP32
+    pinMatrixInAttach(TFT_MOSI, VSPIQ_IN_IDX, false);
+  #else // S2
+    pinMatrixInAttach(TFT_MOSI, FSPIQ_IN_IDX, false);
+  #endif
   SET_BUS_READ_MODE;
 }
 
 /***************************************************************************************
-** Function name:           endSDA
-** Description:             Attach SPI pins after software SPI
+** Function name:           endSDA - VSPI port only, FPSI port only for S2
+** Description:             Attach MOSI to SDA and detach MISO for writes
 ***************************************************************************************/
 void TFT_eSPI::end_SDA_Read(void)
 {
-  pinMode(TFT_MOSI, OUTPUT);
-  pinMatrixOutAttach(TFT_MOSI, VSPID_OUT_IDX, false, false);
-  pinMode(TFT_MISO, INPUT);
-  pinMatrixInAttach(TFT_MISO, VSPIQ_IN_IDX, false);
+  gpio_set_direction((gpio_num_t)TFT_MOSI, GPIO_MODE_OUTPUT);
+  #ifdef CONFIG_IDF_TARGET_ESP32
+    pinMatrixOutAttach(TFT_MOSI, VSPID_OUT_IDX, false, false);
+  #else // S2
+    pinMatrixOutAttach(TFT_MOSI, FSPID_OUT_IDX, false, false);
+  #endif
   SET_BUS_WRITE_MODE;
 }
+
 ////////////////////////////////////////////////////////////////////////////////////////
 #endif // #if defined (TFT_SDA_READ)
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -129,17 +139,7 @@ uint8_t TFT_eSPI::readByte(void)
 ***************************************************************************************/
 void TFT_eSPI::busDir(uint32_t mask, uint8_t mode)
 {
-  gpioMode(TFT_D0, mode);
-  gpioMode(TFT_D1, mode);
-  gpioMode(TFT_D2, mode);
-  gpioMode(TFT_D3, mode);
-  gpioMode(TFT_D4, mode);
-  gpioMode(TFT_D5, mode);
-  gpioMode(TFT_D6, mode);
-  gpioMode(TFT_D7, mode);
-  return;
-  /*
-  // Arduino generic native function, but slower
+  // Arduino generic native function
   pinMode(TFT_D0, mode);
   pinMode(TFT_D1, mode);
   pinMode(TFT_D2, mode);
@@ -148,7 +148,6 @@ void TFT_eSPI::busDir(uint32_t mask, uint8_t mode)
   pinMode(TFT_D5, mode);
   pinMode(TFT_D6, mode);
   pinMode(TFT_D7, mode);
-  return; //*/
 }
 
 /***************************************************************************************
@@ -157,14 +156,8 @@ void TFT_eSPI::busDir(uint32_t mask, uint8_t mode)
 ***************************************************************************************/
 void TFT_eSPI::gpioMode(uint8_t gpio, uint8_t mode)
 {
-  if(mode == INPUT) GPIO.enable_w1tc = ((uint32_t)1 << gpio);
-  else GPIO.enable_w1ts = ((uint32_t)1 << gpio);
-
-  ESP_REG(DR_REG_IO_MUX_BASE + esp32_gpioMux[gpio].reg) // Register lookup
-    = ((uint32_t)2 << FUN_DRV_S)                        // Set drive strength 2
-    | (FUN_IE)                                          // Input enable
-    | ((uint32_t)2 << MCU_SEL_S);                       // Function select 2
-  GPIO.pin[gpio].val = 1;                               // Set pin HIGH
+  pinMode(gpio, mode);
+  digitalWrite(gpio, HIGH);
 }
 ////////////////////////////////////////////////////////////////////////////////////////
 #endif // #ifdef TFT_PARALLEL_8_BIT
@@ -213,7 +206,7 @@ void TFT_eSPI::pushPixels(const void* data_in, uint32_t len)
 ***************************************************************************************/
 /*
 void TFT_eSPI::pushBlock(uint16_t color, uint32_t len){
-  
+
   uint32_t color32 = (color<<8 | color >>8)<<16 | (color<<8 | color >>8);
   bool empty = true;
   volatile uint32_t* spi_w = (volatile uint32_t*)_spi_w;
@@ -262,7 +255,7 @@ void TFT_eSPI::pushBlock(uint16_t color, uint32_t len){
 void TFT_eSPI::pushBlock(uint16_t color, uint32_t len){
 
   volatile uint32_t* spi_w = _spi_w;
-  uint32_t color32 = (color<<8 | color >>8)<<16 | (color<<8 | color >>8);  
+  uint32_t color32 = (color<<8 | color >>8)<<16 | (color<<8 | color >>8);
   uint32_t i = 0;
   uint32_t rem = len & 0x1F;
   len =  len - rem;
@@ -287,7 +280,7 @@ void TFT_eSPI::pushBlock(uint16_t color, uint32_t len){
   {
     while (*_spi_cmd&SPI_USR);
     *_spi_cmd = SPI_USR;
-      len -= 32;
+    len -= 32;
   }
 
   // Do not wait here
@@ -315,7 +308,7 @@ void TFT_eSPI::pushSwapBytePixels(const void* data_in, uint32_t len){
         data+=4;
       }
       while (READ_PERI_REG(SPI_CMD_REG(SPI_PORT))&SPI_USR);
-      WRITE_PERI_REG(SPI_W0_REG(SPI_PORT),  color[0]); 
+      WRITE_PERI_REG(SPI_W0_REG(SPI_PORT),  color[0]);
       WRITE_PERI_REG(SPI_W1_REG(SPI_PORT),  color[1]);
       WRITE_PERI_REG(SPI_W2_REG(SPI_PORT),  color[2]);
       WRITE_PERI_REG(SPI_W3_REG(SPI_PORT),  color[3]);
@@ -346,7 +339,7 @@ void TFT_eSPI::pushSwapBytePixels(const void* data_in, uint32_t len){
     }
     while (READ_PERI_REG(SPI_CMD_REG(SPI_PORT))&SPI_USR);
     WRITE_PERI_REG(SPI_MOSI_DLEN_REG(SPI_PORT), 255);
-    WRITE_PERI_REG(SPI_W0_REG(SPI_PORT),  color[0]); 
+    WRITE_PERI_REG(SPI_W0_REG(SPI_PORT),  color[0]);
     WRITE_PERI_REG(SPI_W1_REG(SPI_PORT),  color[1]);
     WRITE_PERI_REG(SPI_W2_REG(SPI_PORT),  color[2]);
     WRITE_PERI_REG(SPI_W3_REG(SPI_PORT),  color[3]);
@@ -527,7 +520,11 @@ void TFT_eSPI::pushSwapBytePixels(const void* data_in, uint32_t len){
 ** Description:             Write a block of pixels of the same colour
 ***************************************************************************************/
 void TFT_eSPI::pushBlock(uint16_t color, uint32_t len){
+  #if defined (SSD1963_DRIVER)
+  if ( ((color & 0xF800)>> 8) == ((color & 0x07E0)>> 3) && ((color & 0xF800)>> 8)== ((color & 0x001F)<< 3) )
+  #else
   if ( (color >> 8) == (color & 0x00FF) )
+  #endif
   { if (!len) return;
     tft_Write_16(color);
   #if defined (SSD1963_DRIVER)
@@ -638,6 +635,38 @@ void TFT_eSPI::pushPixelsDMA(uint16_t* image, uint32_t len)
   trans.tx_buffer = image;  //finally send the line data
   trans.length = len * 16;        //Data length, in bits
   trans.flags = 0;                //SPI_TRANS_USE_TXDATA flag
+
+  ret = spi_device_queue_trans(dmaHAL, &trans, portMAX_DELAY);
+  assert(ret == ESP_OK);
+
+  spiBusyCheck++;
+}
+
+
+/***************************************************************************************
+** Function name:           pushImageDMA
+** Description:             Push image to a window (w*h must be less than 65536)
+***************************************************************************************/
+// Fixed const data assumed, will NOT clip or swap bytes
+void TFT_eSPI::pushImageDMA(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t const* image)
+{
+  if ((w == 0) || (h == 0) || (!DMA_Enabled)) return;
+
+  uint32_t len = w*h;
+
+  dmaWait();
+
+  setAddrWindow(x, y, w, h);
+
+  esp_err_t ret;
+  static spi_transaction_t trans;
+
+  memset(&trans, 0, sizeof(spi_transaction_t));
+
+  trans.user = (void *)1;
+  trans.tx_buffer = image;   //Data pointer
+  trans.length = len * 16;   //Data length, in bits
+  trans.flags = 0;           //SPI_TRANS_USE_TXDATA flag
 
   ret = spi_device_queue_trans(dmaHAL, &trans, portMAX_DELAY);
   assert(ret == ESP_OK);
@@ -800,5 +829,5 @@ void TFT_eSPI::deInitDMA(void)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-#endif // End of DMA FUNCTIONS    
+#endif // End of DMA FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////////////////
