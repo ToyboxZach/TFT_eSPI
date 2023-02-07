@@ -838,7 +838,6 @@ private:
   bool     _vpDatum;
   bool     _vpOoB;
 
-  int32_t  cursor_x, cursor_y, padX;       // Text cursor x,y and padding setting
 
   uint32_t fontsloaded;               // Bit field of fonts loaded
 
