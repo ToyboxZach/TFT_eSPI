@@ -526,9 +526,16 @@ void TFT_eSPI::drawGlyph(uint16_t code)
         fillRect(bg_cursor_x, cy + gHeight[gNum], fillwidth, fillheight, textbgcolor);
       }
     }
-
+  
     if (pbuffer) free(pbuffer);
-    cursor_x += gxAdvance[gNum] + letterSpacing;
+    
+    cursor_x += gxAdvance[gNum] 
+    if(letterSpacing){
+      fillRect(cursor_x, cy, letterSpacing, gHeight[gNum], textbgcolor);
+      cursor_x += letterSpacing
+    }
+
+
     endWrite();
   }
   else
