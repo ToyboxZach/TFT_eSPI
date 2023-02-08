@@ -531,7 +531,7 @@ void TFT_eSPI::drawGlyph(uint16_t code)
     
     cursor_x += gxAdvance[gNum];
     if(letterSpacing){
-      fillRect(cursor_x, cy, letterSpacing, gHeight[gNum], textbgcolor);
+      fillRect(cursor_x, cursor_y, letterSpacing, gFont.yAdvance, textbgcolor);
       cursor_x += letterSpacing;
     }
 
