@@ -414,7 +414,9 @@ class TFT_eSPI : public Print { friend class TFT_eSprite; // Sprite class has ac
 
  //--------------------------------------- public ------------------------------------//
  public:
-
+  void setLineSpacing(uint16_t spacing);
+  int32_t cursor_x, cursor_y, padX; // Text cursor x,y and padding setting
+  uint16_t letterSpacing = 0;
   TFT_eSPI(int16_t _W = TFT_WIDTH, int16_t _H = TFT_HEIGHT);
 
   // init() and begin() are equivalent, begin() included for backwards compatibility
@@ -859,7 +861,6 @@ class TFT_eSPI : public Print { friend class TFT_eSprite; // Sprite class has ac
   bool     _vpDatum;
   bool     _vpOoB;
 
-  int32_t  cursor_x, cursor_y, padX;       // Text cursor x,y and padding setting
   int32_t  bg_cursor_x;                    // Background fill cursor
   int32_t  last_cursor_x;                  // Previous text cursor position when fill used
 

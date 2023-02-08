@@ -528,7 +528,7 @@ void TFT_eSPI::drawGlyph(uint16_t code)
     }
 
     if (pbuffer) free(pbuffer);
-    cursor_x += gxAdvance[gNum];
+    cursor_x += gxAdvance[gNum] + letterSpacing;
     endWrite();
   }
   else
